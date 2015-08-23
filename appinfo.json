@@ -11,7 +11,14 @@
     "longName": "AK_WATCHFACE",
     "projectType": "native",
     "resources": {
-        "media": []
+        "media": [
+            {
+                "characterRegex": "[0-9:.]",
+                "file": "fonts/bitham-bold.ttf",
+                "name": "BITHAM_LARGE_50",
+                "type": "font"
+            }
+        ]
     },
     "sdkVersion": "3",
     "shortName": "AK_WATCHFACE",

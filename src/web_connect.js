@@ -1,3 +1,11 @@
+// Adding addDays function to date
+Date.prototype.addDays = function(days)
+{
+    var dat = new Date(this.valueOf());
+    dat.setDate(dat.getDate() + days);
+    return dat;
+};
+
 // Helper function for sending an xml http request
 var xhrRequest = function (url, type, callback) {
   var xhr = new XMLHttpRequest();
@@ -18,6 +26,8 @@ function getWeatherLocation(pos) {
     // Get San Mateo weather
     position = '&lat=37.561&lon=-122.286';
   } else {
+    console.log("Lat: " + pos.coords.latitude);
+    console.log("Lon: " + pos.coords.longitude);
     position = '&lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude;
   }
   return position;
@@ -34,12 +44,18 @@ function locationSuccess(pos) {
     function(responseText) {
       var json = JSON.parse(responseText);
       
-      var date = new Date();
-      var hour = date.getHours();
-      var dayNum = 0;
+      var desiredDate = new Date();
+      var hour = desiredDate.getHours();
       if (hour >= 15) {
+        desiredDate.addDays(1);
+      }
+      
+      var dayNum = 0;
+      if ((new Date(json.list[0].dt)).getDate() != desiredDate.getDate()) {
         dayNum = 1;
       }
+      
+      console.log('DayNum: ' + dayNum);
       
       var city = json.city.name;
       console.log('City is ' + city);
