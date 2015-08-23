@@ -7,10 +7,19 @@
 static Window *main_window;
 static TextLayer *time_layer;
 static TextLayer *date_layer;
+static TextLayer *day_of_week_layer;
 static TextLayer *weather_layer;
 static TextLayer *city_layer;
+static TextLayer *battery_layer;
 
 static GFont tall_font;
+
+// TODO:
+//   - Sports scores
+//   - Time to work
+//   - Better time font / switching fonts
+//   - Better weather
+//   - Day of week
 
 static void update_time() {
   // Get a tm structure
@@ -29,6 +38,19 @@ static void update_time() {
   text_layer_set_text(time_layer, buffer);
 }
 
+static void update_battery() {
+  BatteryChargeState charge_state = battery_state_service_peek();
+  static char buffer[] = "...%";
+  
+  if (charge_state.charge_percent == 100) {
+    snprintf(buffer, sizeof(buffer), "100");
+  } else {
+    snprintf(buffer, sizeof(buffer), "%d%%", charge_state.charge_percent);
+  }
+  
+  text_layer_set_text(battery_layer, buffer);
+}
+
 static void update_date() {
   // Get a tm structure
   time_t sec_since_epoch = time(NULL); 
@@ -36,12 +58,37 @@ static void update_date() {
   static char buffer[] = "00/00/00";
   
   strftime(buffer, sizeof("00/00/00"), "%D", tick_time);
-  
   text_layer_set_text(date_layer, buffer);
+  
+  static char week_day_buffer[] = "SU";
+  if (tick_time->tm_wday == 0) {
+    snprintf(week_day_buffer, sizeof("SU"), "SU");
+  } else if (tick_time->tm_wday == 1) {
+    snprintf(week_day_buffer, sizeof("SU"), "MO");
+  } else if (tick_time->tm_wday == 2) {
+    snprintf(week_day_buffer, sizeof("SU"), "TU");
+  } else if (tick_time->tm_wday == 3) {
+    snprintf(week_day_buffer, sizeof("SU"), "WE");
+  } else if (tick_time->tm_wday == 4) {
+    snprintf(week_day_buffer, sizeof("SU"), "TH");
+  } else if (tick_time->tm_wday == 5) {
+    snprintf(week_day_buffer, sizeof("SU"), "FR");
+  } else if (tick_time->tm_wday == 6) {
+    snprintf(week_day_buffer, sizeof("SU"), "SA");
+  } else {
+    snprintf(week_day_buffer, sizeof("SU"), "--");
+  }
+
+  text_layer_set_text(day_of_week_layer, week_day_buffer);
 }
 
 static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
   update_time();
+  
+  // Update battery percentage every 10 min
+  if (tick_time->tm_min % 10 == 0) {
+    update_battery();
+  }
   
   // Get weather update every 30 minutes
   if(tick_time->tm_min % 30 == 0) {
@@ -51,16 +98,17 @@ static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
     app_message_outbox_send();
   }
   
-  if(tick_time->tm_min == 0) {
+  // Update date when the date changes
+  if(tick_time->tm_hour == 0 && tick_time->tm_min == 0) {
     update_date();
   }
 }
 
 static void main_window_load(Window *window) {
 
-  // Create time TextLayer
   tall_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_BITHAM_LARGE_50));
   
+  // Create time TextLayer
   time_layer = text_layer_create(GRect(0, 24, 144, 60));
   text_layer_set_background_color(time_layer, GColorBlack);
   text_layer_set_text_color(time_layer, GColorWhite);
@@ -77,6 +125,24 @@ static void main_window_load(Window *window) {
   text_layer_set_text_alignment(date_layer, GTextAlignmentLeft);
   text_layer_set_text(date_layer, "00/00/00");
   layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(date_layer));
+  
+  // Create battery TextLayer
+  battery_layer = text_layer_create(GRect(104, 0, 40, 24));
+  text_layer_set_background_color(battery_layer, GColorBlack);
+  text_layer_set_text_color(battery_layer, GColorWhite);
+  text_layer_set_font(battery_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(battery_layer, GTextAlignmentRight);
+  text_layer_set_text(battery_layer, "...%");
+  layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(battery_layer));
+  
+  // Create day_of_week TextLayer
+  day_of_week_layer = text_layer_create(GRect(80, 0, 24, 24));
+  text_layer_set_background_color(day_of_week_layer, GColorBlack);
+  text_layer_set_text_color(day_of_week_layer, GColorWhite);
+  text_layer_set_font(day_of_week_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text_alignment(day_of_week_layer, GTextAlignmentRight);
+  text_layer_set_text(day_of_week_layer, "--");
+  layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(day_of_week_layer));
   
   // Create temperature Layer
   weather_layer = text_layer_create(GRect(0, 144, 144, 24));
@@ -167,6 +233,7 @@ static void init() {
   tick_timer_service_subscribe(MINUTE_UNIT, minute_update);
   update_time();
   update_date();
+  update_battery();
 
   
   // Register callbacks
