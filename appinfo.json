@@ -1,0 +1,26 @@
+{
+    "appKeys": {
+        "KEY_CITY": 2,
+        "KEY_CONDITIONS": 1,
+        "KEY_TEMPERATURE": 0
+    },
+    "capabilities": [
+        "location"
+    ],
+    "companyName": "alextkaiser@gmail.com",
+    "longName": "AK_WATCHFACE",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "sdkVersion": "3",
+    "shortName": "AK_WATCHFACE",
+    "targetPlatforms": [
+        "basalt"
+    ],
+    "uuid": "b06c6436-1fa0-4122-bfc4-f14d34d578f9",
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": true
+    }
+}
