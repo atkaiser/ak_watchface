@@ -3,6 +3,8 @@
 #define KEY_TEMPERATURE 0
 #define KEY_CONDITIONS 1
 #define KEY_CITY 2
+#define KEY_INFO 3
+#define KEY_GAME 4
 
 static Window *main_window;
 static TextLayer *time_layer;
@@ -11,15 +13,18 @@ static TextLayer *day_of_week_layer;
 static TextLayer *weather_layer;
 static TextLayer *city_layer;
 static TextLayer *battery_layer;
+static TextLayer *info_layer;
+
+static bool current_game;
 
 static GFont tall_font;
 
 // TODO:
-//   - Sports scores
-//   - Time to work
-//   - Better time font / switching fonts
-//   - Better weather
-//   - Day of week
+//   - Traffic time from current location
+//   - Refactor
+//   - Show both traffic and sports scores
+//   - Sports scores, more sports
+//   - Store weather, traffic time, and game info
 
 static void update_time() {
   // Get a tm structure
@@ -40,13 +45,9 @@ static void update_time() {
 
 static void update_battery() {
   BatteryChargeState charge_state = battery_state_service_peek();
-  static char buffer[] = "...%";
+  static char buffer[] = "..%";
   
-  if (charge_state.charge_percent == 100) {
-    snprintf(buffer, sizeof(buffer), "100");
-  } else {
-    snprintf(buffer, sizeof(buffer), "%d%%", charge_state.charge_percent);
-  }
+  snprintf(buffer, sizeof(buffer), "%d%%", charge_state.charge_percent);
   
   text_layer_set_text(battery_layer, buffer);
 }
@@ -94,8 +95,45 @@ static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
   if(tick_time->tm_min % 30 == 0) {
     DictionaryIterator *iter;
     app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, 0, 0);
+    dict_write_uint8(iter, KEY_TEMPERATURE, 0);
     app_message_outbox_send();
+  }
+  
+  // Determine if to get commute time
+  bool traffic_time = false;
+  if (tick_time->tm_wday >= 1 && tick_time->tm_wday <= 5) {
+    if (tick_time->tm_hour >= 6 && tick_time->tm_hour <= 9) {
+      traffic_time = true;
+      DictionaryIterator *iter;
+      app_message_outbox_begin(&iter);
+      dict_write_uint8(iter, KEY_INFO, 0);
+      app_message_outbox_send();
+    } else if (tick_time->tm_hour >= 16 && tick_time->tm_hour <= 18) {
+      traffic_time = true;
+      DictionaryIterator *iter;
+      app_message_outbox_begin(&iter);
+      dict_write_uint8(iter, KEY_INFO, 1);
+      app_message_outbox_send();
+    }
+  }
+  
+  // Determine if to get scores
+  if (traffic_time) {
+    if (current_game) {
+      if (tick_time->tm_min % 2 == 0) {
+        DictionaryIterator *iter;
+        app_message_outbox_begin(&iter);
+        dict_write_uint8(iter, KEY_GAME, 0);
+        app_message_outbox_send();
+      }
+    } else {
+      if (tick_time->tm_min % 10 == 0) {
+        DictionaryIterator *iter;
+        app_message_outbox_begin(&iter);
+        dict_write_uint8(iter, KEY_GAME, 0);
+        app_message_outbox_send();
+      }
+    }
   }
   
   // Update date when the date changes
@@ -132,7 +170,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text_color(battery_layer, GColorWhite);
   text_layer_set_font(battery_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(battery_layer, GTextAlignmentRight);
-  text_layer_set_text(battery_layer, "...%");
+  text_layer_set_text(battery_layer, "..%");
   layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(battery_layer));
   
   // Create day_of_week TextLayer
@@ -144,8 +182,16 @@ static void main_window_load(Window *window) {
   text_layer_set_text(day_of_week_layer, "--");
   layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(day_of_week_layer));
   
-  // Create temperature Layer
-  weather_layer = text_layer_create(GRect(0, 144, 144, 24));
+  // Create info TextLayer
+  info_layer = text_layer_create(GRect(0, 84, 144, 26));
+  text_layer_set_background_color(info_layer, GColorBlack);
+  text_layer_set_text_color(info_layer, GColorWhite);
+  text_layer_set_text_alignment(info_layer, GTextAlignmentCenter);
+  text_layer_set_font(info_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(info_layer));
+  
+  // Create weather Layer
+  weather_layer = text_layer_create(GRect(0, 134, 144, 34));
   text_layer_set_background_color(weather_layer, GColorBlack);
   text_layer_set_text_color(weather_layer, GColorWhite);
   text_layer_set_text_alignment(weather_layer, GTextAlignmentCenter);
@@ -154,7 +200,7 @@ static void main_window_load(Window *window) {
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(weather_layer));
   
   // Create city layer
-  city_layer = text_layer_create(GRect(0,120, 144, 24));
+  city_layer = text_layer_create(GRect(0, 110, 144, 24));
   text_layer_set_background_color(city_layer, GColorBlack);
   text_layer_set_text_color(city_layer, GColorWhite);
   text_layer_set_text_alignment(city_layer, GTextAlignmentLeft);
@@ -170,6 +216,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(date_layer);
   text_layer_destroy(weather_layer);
   text_layer_destroy(city_layer);
+  text_layer_destroy(info_layer);
   
   fonts_unload_custom_font(tall_font);
 }
@@ -181,6 +228,10 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   static char conditions_buffer[32];
   static char city_layer_buffer[32];
   static char weather_layer_buffer[32];
+  static char info_layer_buffer[32];
+  
+  bool isTraffic = false;
+  bool isGame = false;
 
   while(t != NULL) {
     switch(t->key) {
@@ -193,6 +244,14 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     case KEY_CITY:
       snprintf(city_layer_buffer, sizeof(city_layer_buffer), "%s:", t->value->cstring);
       break;
+    case KEY_INFO:
+      isTraffic = true;
+      snprintf(info_layer_buffer, sizeof(info_layer_buffer), "%s", t->value->cstring);
+      break;
+    case KEY_GAME:
+      isGame = true;
+      snprintf(info_layer_buffer, sizeof(info_layer_buffer), "%s", t->value->cstring);
+      break;
     default:
       APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
       break;
@@ -201,10 +260,14 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     t = dict_read_next(iterator);
   }
   
-  // Assemble full string and display
-  snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s, %s", temperature_buffer, conditions_buffer);
-  text_layer_set_text(weather_layer, weather_layer_buffer);
-  text_layer_set_text(city_layer, city_layer_buffer);
+  if (isTraffic || isGame) {
+    text_layer_set_text(info_layer, info_layer_buffer);
+  } else {
+    // Assemble full string and display
+    snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s, %s", temperature_buffer, conditions_buffer);
+    text_layer_set_text(weather_layer, weather_layer_buffer);
+    text_layer_set_text(city_layer, city_layer_buffer);
+  }
 }
 
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
@@ -220,6 +283,8 @@ static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
 }  
   
 static void init() {
+  current_game = false;
+  
   // Create main window
   main_window = window_create();
   window_set_window_handlers(main_window, (WindowHandlers) {
@@ -235,7 +300,6 @@ static void init() {
   update_date();
   update_battery();
 
-  
   // Register callbacks
   app_message_register_inbox_received(inbox_received_callback);
   app_message_register_inbox_dropped(inbox_dropped_callback);
