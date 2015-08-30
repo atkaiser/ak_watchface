@@ -116,38 +116,45 @@ function getWeather() {
 }
 
 function getTraffic(morning) {
-  var url;
-  if (morning == '0') {
-    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37+May+Ct,+Hayward,+CA+94544&to=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";  
-  } else {
-    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&to=37+May+Ct,+Hayward,+CA+94544";  
-  }
-  
-  xhrRequest(url, 'GET', 
-    function(responseText) {
-      var json = JSON.parse(responseText);
-      var time = json.route.realTime;
+  navigator.geolocation.getCurrentPosition(
+    function (pos) {
+      var position = pos.coords.latitude + ',' + pos.coords.longitude;
+      var url;
+      if (morning == '0') {
+        url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=" + position + "&to=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";  
+      } else {
+        url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=" + position + "&to=37+May+Ct,+Hayward,+CA+94544";  
+      }
       
-      var min = Math.floor(time / 60);
-      var sec = time - (min * 60);
-      
-      var stringTime = min + ":" + sec;
-      
-      console.log("Traffic time: " + stringTime);
-      
-      var dictionary = {
-        'KEY_INFO': stringTime,
-      };
-      
-      Pebble.sendAppMessage(dictionary,
-        function(e) {
-          console.log('Traffic info sent to Pebble successfully!');
-        },
-        function(e) {
-          console.log('Error sending traffic info to Pebble!');
+      xhrRequest(url, 'GET', 
+        function(responseText) {
+          var json = JSON.parse(responseText);
+          var time = json.route.realTime;
+          
+          var min = Math.floor(time / 60);
+          var sec = time - (min * 60);
+          
+          var stringTime = min + ":" + pad(sec, 2);
+          
+          console.log("Traffic time: " + stringTime);
+          
+          var dictionary = {
+            'KEY_INFO': stringTime,
+          };
+          
+          Pebble.sendAppMessage(dictionary,
+            function(e) {
+              console.log('Traffic info sent to Pebble successfully!');
+            },
+            function(e) {
+              console.log('Error sending traffic info to Pebble!');
+            }
+          );
         }
       );
-    }
+    },
+    locationError,
+    {timeout: 15000, maximumAge: 60000}
   );
 }
 

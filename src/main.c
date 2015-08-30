@@ -20,11 +20,10 @@ static bool current_game;
 static GFont tall_font;
 
 // TODO:
-//   - Traffic time from current location
 //   - Refactor
-//   - Show both traffic and sports scores
 //   - Sports scores, more sports
 //   - Store weather, traffic time, and game info
+//   - Show both traffic and sports scores
 
 static void update_time() {
   // Get a tm structure
@@ -118,7 +117,7 @@ static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
   }
   
   // Determine if to get scores
-  if (traffic_time) {
+  if (!traffic_time) {
     if (current_game) {
       if (tick_time->tm_min % 2 == 0) {
         DictionaryIterator *iter;
@@ -147,7 +146,7 @@ static void main_window_load(Window *window) {
   tall_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_BITHAM_LARGE_50));
   
   // Create time TextLayer
-  time_layer = text_layer_create(GRect(0, 24, 144, 60));
+  time_layer = text_layer_create(GRect(0, 24, 144, 56));
   text_layer_set_background_color(time_layer, GColorBlack);
   text_layer_set_text_color(time_layer, GColorWhite);
   text_layer_set_font(time_layer, tall_font);
@@ -183,11 +182,11 @@ static void main_window_load(Window *window) {
   layer_add_child(window_get_root_layer(main_window), text_layer_get_layer(day_of_week_layer));
   
   // Create info TextLayer
-  info_layer = text_layer_create(GRect(0, 84, 144, 26));
+  info_layer = text_layer_create(GRect(0, 80, 144, 30));
   text_layer_set_background_color(info_layer, GColorBlack);
   text_layer_set_text_color(info_layer, GColorWhite);
   text_layer_set_text_alignment(info_layer, GTextAlignmentCenter);
-  text_layer_set_font(info_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_font(info_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(info_layer));
   
   // Create weather Layer
