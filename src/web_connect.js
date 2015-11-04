@@ -66,8 +66,6 @@ function locationSuccess(pos) {
       
       var locationUrl = 'http://maps.googleapis.com/maps/api/geocode/json?latlng=' + getWeatherLocation(pos);
       
-      console.log('Location url: ' + locationUrl);
-      
       xhrRequest(locationUrl, 'GET',
         function(cityResponse) {
           var cityJson = JSON.parse(cityResponse);
@@ -116,49 +114,42 @@ function getWeather() {
 }
 
 function getTraffic(morning) {
-  navigator.geolocation.getCurrentPosition(
-    function (pos) {
-      var position = pos.coords.latitude + ',' + pos.coords.longitude;
-      var url;
-      if (morning == '0') {
-        url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=" + position + "&to=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";  
-      } else {
-        url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=" + position + "&to=37+May+Ct,+Hayward,+CA+94544";  
-      }
-      
-      xhrRequest(url, 'GET', 
-        function(responseText) {
-          var json = JSON.parse(responseText);
-          var time = json.route.realTime;
+  var url;
+  if (morning == '0') {
+    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37+May+Ct,+Hayward,+CA+94544&to=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";  
+  } else {
+    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&to=37+May+Ct,+Hayward,+CA+94544";  
+  }
+  console.log('Traffic url: ' + url);
+  xhrRequest(url, 'GET', 
+    function(responseText) {
+      var json = JSON.parse(responseText);
+      var time = json.route.realTime;
+
+      var min = Math.floor(time / 60);
+      var sec = time - (min * 60);
           
-          var min = Math.floor(time / 60);
-          var sec = time - (min * 60);
+      var stringTime = min + ":" + pad(sec, 2);
           
-          var stringTime = min + ":" + pad(sec, 2);
+      console.log("Traffic time: " + stringTime);
           
-          console.log("Traffic time: " + stringTime);
+      var dictionary = {
+        'KEY_INFO': stringTime,
+      };
           
-          var dictionary = {
-            'KEY_INFO': stringTime,
-          };
-          
-          Pebble.sendAppMessage(dictionary,
-            function(e) {
-              console.log('Traffic info sent to Pebble successfully!');
-            },
-            function(e) {
-              console.log('Error sending traffic info to Pebble!');
-            }
-          );
+      Pebble.sendAppMessage(dictionary,
+        function(e) {
+          console.log('Traffic info sent to Pebble successfully!');
+        },
+        function(e) {
+          console.log('Error sending traffic info to Pebble!');
         }
       );
-    },
-    locationError,
-    {timeout: 15000, maximumAge: 60000}
+    }
   );
 }
 
-function getGameInfo() {
+function getBaseballInfo(scoresQ) {
   var date = new Date();
   var url = 'http://mlb.mlb.com/gdcross/components/game/mlb/year_' +
       date.getFullYear() + '/month_' + pad(date.getMonth()+1, 2) + '/day_' + pad(date.getDate(), 2) + '/master_scoreboard.json';
@@ -170,32 +161,156 @@ function getGameInfo() {
       
       var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
       var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
+      var sentGame = false;
       
-      console.log('Games len: ' + games.length);
-      
-      for(var i = 0; i < games.length; i++) {
-        var game = games[i];
-        console.log('Home team: ' + game.home_team_name);
-        if (game.home_team_name == "Giants" || game.away_team_name == "Giants") {
-          var home_score = game.linescore.r.home;
-          var away_score = game.linescore.r.away;
-          var score_string;
-          if (game.home_team_name == "Giants") {
-            score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " G";
-          } else {
-            score_string = "G " + away_score + "-" + home_score + " " + game.home_team_name[0];
+      if (games) {
+        for(var i = 0; i < games.length; i++) {
+          var game = games[i];
+          if (game.home_team_name == "Giants" || game.away_team_name == "Giants") {
+            var home_score = game.linescore.r.home;
+            var away_score = game.linescore.r.away;
+            var inning = game.status.inning;
+            if (game.status.top_inning == "Y") {
+              inning = "T" + inning;
+            } else {
+              inning = "B" + inning;
+            }
+            
+            var score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " " + inning;
+            
+            console.log('Baseball str: ' + score_string);
+            
+            var dictionary = {
+              'KEY_INFO': score_string,
+            };
+            
+            Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
+            sentGame = true;
           }
-          console.log('Score str: ' + score_string);
-          
-          var dictionary = {
-            'KEY_GAME': score_string,
-          };
-      
-          Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
         }
+      }
+      if (!sentGame && scoresQ.length !== 0) {
+        var nextInfo = scoresQ.pop();
+        nextInfo(scoresQ);
       }
     }
   );
+}
+
+function getNhlInfo(scoresQ) {
+  console.log("NHL call");
+  var url = 'http://live.nhle.com/GameData/RegularSeasonScoreboardv3.jsonp';
+  xhrRequest(url, 'GET',
+    function(res) {
+      var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
+      var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
+      var sentGame = false;
+      
+      var json_str = res.substr(res.indexOf("(")+1,
+                                res.indexOf(")") - (res.indexOf("(") + 1));
+      var json = JSON.parse(json_str);
+      var games = json.games;
+      for(var i = 0; i < games.length; i++) {
+        var game = games[i];
+        if (game.htv == "sharks" || game.atv == "sharks") {
+          var time = game.ts;
+          console.log(game.bs);
+          if (game.bs == "LIVE") {
+            if (!isNaN(time[0])) {
+              time = time.substr(0, time.length-2);
+            }
+            var score_string = game.atv[0].toUpperCase() + 
+                " " + game.ats + "-" + 
+                game.hts + " " + game.htv[0].toUpperCase() + 
+                " " + time;
+            
+            console.log('Score str: ' + score_string);
+            console.log('Time: ' + time);
+            
+            var dictionary = {
+              'KEY_INFO': score_string,
+            };
+            
+            Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
+            sentGame = true;
+          }
+        }
+      }
+      if (!sentGame && scoresQ.length !== 0) {
+        var nextInfo = scoresQ.pop();
+        nextInfo(scoresQ);
+      }
+    }
+  );
+}
+
+function getNbaInfo(scoresQ) {
+  console.log("NBA call");
+  var date = new Date();
+  var url = 'http://data.nba.com/data/1h/json/cms/noseason/scoreboard/' + date.getFullYear() + pad(date.getMonth()+1, 2) + pad(date.getDate(), 2) + '/games.json';
+  console.log('NBA url: ' + url);
+  xhrRequest(url, 'GET',
+    function(res) {
+      var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
+      var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
+      var sentGame = false;
+      
+      var json = JSON.parse(res);
+      var games = json.sports_content.games.game;
+      for(var i = 0; i < games.length; i++) {
+        var game = games[i];
+        if (game.home.abbreviation == 'GSW' || game.visitor.abbreviation == 'GSW') {
+          var score_string;
+          if (game.visitor.score === '') {
+            score_string = game.visitor.abbreviation + ' - ' + game.home.abbreviation;
+          } else {
+            score_string = game.visitor.abbreviation[0] + ' ' + game.visitor.score + '-' +
+                           game.home.score + ' ' + game.home.abbreviation[0];
+          }
+          
+          console.log('Score str: ' + score_string);
+
+          var dictionary = {
+            'KEY_INFO': score_string,
+          };
+
+          Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
+          sentGame = true;
+        }
+      }
+      if (!sentGame && scoresQ.length !== 0) {
+        var nextInfo = scoresQ.pop();
+        nextInfo(scoresQ);
+      }
+    }
+  );
+}
+
+function getInfo() {
+  var date = new Date();
+  var trafficTime = false;
+  if (date.getDay() >= 1 && date.getDay() <= 5) {
+    if (date.getHours() >= 7 && date.getHours() <= 9) {
+      trafficTime = true;
+      if (date.getMinutes() % 1 === 0) {
+        getTraffic('0');
+      }
+    }
+    else if (date.getHours() >= 16 && date.getHours() <= 18) {
+      trafficTime = true;
+      if (date.getMinutes() % 5 === 0) {
+        getTraffic('1');
+      }
+    }
+  }
+  if (!trafficTime) {
+    if (date.getMinutes() % 2 === 0) {
+      var scoresQ = [];
+      scoresQ.push(getNbaInfo);
+      scoresQ.push(getBaseballInfo);
+      getNhlInfo(scoresQ);
+    }
+  }
 }
 
 // Listen for when an AppMessage is received
@@ -204,10 +319,9 @@ Pebble.addEventListener('appmessage',
     console.log('AppMessage received!');
     console.log('Received message: ' + JSON.stringify(e.payload));
     if (e.payload.hasOwnProperty("KEY_INFO")) {
-      getTraffic(e.payload.KEY_INFO);
-    } else if (e.payload.hasOwnProperty("KEY_GAME")) {
-      getGameInfo();
-    } else {
+      getInfo();
+    }
+    if (e.payload.hasOwnProperty("KEY_TEMPERATURE")) {
       getWeather();
     }
   }                     

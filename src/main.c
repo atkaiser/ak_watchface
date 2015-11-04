@@ -4,7 +4,6 @@
 #define KEY_CONDITIONS 1
 #define KEY_CITY 2
 #define KEY_INFO 3
-#define KEY_GAME 4
 
 static Window *main_window;
 static TextLayer *time_layer;
@@ -20,10 +19,10 @@ static bool current_game;
 static GFont tall_font;
 
 // TODO:
-//   - Refactor
 //   - Sports scores, more sports
 //   - Store weather, traffic time, and game info
 //   - Show both traffic and sports scores
+//   - Show sports scores a little before and after game
 
 static void update_time() {
   // Get a tm structure
@@ -85,60 +84,30 @@ static void update_date() {
 static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
   update_time();
   
-  // Update battery percentage every 10 min
-  if (tick_time->tm_min % 10 == 0) {
+  // Update battery percentage every 15 min
+  if (tick_time->tm_min % 15 == 0) {
     update_battery();
-  }
-  
-  // Get weather update every 30 minutes
-  if(tick_time->tm_min % 30 == 0) {
-    DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, KEY_TEMPERATURE, 0);
-    app_message_outbox_send();
-  }
-  
-  // Determine if to get commute time
-  bool traffic_time = false;
-  if (tick_time->tm_wday >= 1 && tick_time->tm_wday <= 5) {
-    if (tick_time->tm_hour >= 6 && tick_time->tm_hour <= 9) {
-      traffic_time = true;
-      DictionaryIterator *iter;
-      app_message_outbox_begin(&iter);
-      dict_write_uint8(iter, KEY_INFO, 0);
-      app_message_outbox_send();
-    } else if (tick_time->tm_hour >= 16 && tick_time->tm_hour <= 18) {
-      traffic_time = true;
-      DictionaryIterator *iter;
-      app_message_outbox_begin(&iter);
-      dict_write_uint8(iter, KEY_INFO, 1);
-      app_message_outbox_send();
-    }
-  }
-  
-  // Determine if to get scores
-  if (!traffic_time) {
-    if (current_game) {
-      if (tick_time->tm_min % 2 == 0) {
-        DictionaryIterator *iter;
-        app_message_outbox_begin(&iter);
-        dict_write_uint8(iter, KEY_GAME, 0);
-        app_message_outbox_send();
-      }
-    } else {
-      if (tick_time->tm_min % 10 == 0) {
-        DictionaryIterator *iter;
-        app_message_outbox_begin(&iter);
-        dict_write_uint8(iter, KEY_GAME, 0);
-        app_message_outbox_send();
-      }
-    }
   }
   
   // Update date when the date changes
   if(tick_time->tm_hour == 0 && tick_time->tm_min == 0) {
     update_date();
   }
+
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  
+  // Get weather update every 15 minutes
+  if(tick_time->tm_min % 15 == 0) {
+    dict_write_uint8(iter, KEY_TEMPERATURE, 0);
+  }
+  
+  // Get new info, which is traffic or game data
+  // This won't always call back
+  dict_write_uint8(iter, KEY_INFO, 0);
+  
+  app_message_outbox_send();
+
 }
 
 static void main_window_load(Window *window) {
@@ -229,8 +198,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   static char weather_layer_buffer[32];
   static char info_layer_buffer[32];
   
-  bool isTraffic = false;
-  bool isGame = false;
+  bool isInfo = false;
 
   while(t != NULL) {
     switch(t->key) {
@@ -244,11 +212,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       snprintf(city_layer_buffer, sizeof(city_layer_buffer), "%s:", t->value->cstring);
       break;
     case KEY_INFO:
-      isTraffic = true;
-      snprintf(info_layer_buffer, sizeof(info_layer_buffer), "%s", t->value->cstring);
-      break;
-    case KEY_GAME:
-      isGame = true;
+      isInfo = true;
       snprintf(info_layer_buffer, sizeof(info_layer_buffer), "%s", t->value->cstring);
       break;
     default:
@@ -259,7 +223,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     t = dict_read_next(iterator);
   }
   
-  if (isTraffic || isGame) {
+  if (isInfo) {
     text_layer_set_text(info_layer, info_layer_buffer);
   } else {
     // Assemble full string and display
@@ -282,7 +246,7 @@ static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
 }  
   
 static void init() {
-  current_game = false;
+  current_game = true;
   
   // Create main window
   main_window = window_create();

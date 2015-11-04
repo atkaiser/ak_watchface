@@ -2,7 +2,6 @@
     "appKeys": {
         "KEY_CITY": 2,
         "KEY_CONDITIONS": 1,
-        "KEY_GAME": 4,
         "KEY_INFO": 3,
         "KEY_TEMPERATURE": 0
     },
