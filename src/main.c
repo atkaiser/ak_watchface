@@ -13,16 +13,9 @@ static TextLayer *weather_layer;
 static TextLayer *city_layer;
 static TextLayer *battery_layer;
 static TextLayer *info_layer;
-
-static bool current_game;
+static TextLayer *bluetooth_layer;
 
 static GFont tall_font;
-
-// TODO:
-//   - Sports scores, more sports
-//   - Store weather, traffic time, and game info
-//   - Show both traffic and sports scores
-//   - Show sports scores a little before and after game
 
 static void update_time() {
   // Get a tm structure
@@ -39,6 +32,18 @@ static void update_time() {
   }
 
   text_layer_set_text(time_layer, buffer);
+}
+
+static void update_bluetooth() {
+  static char bluetooth_buffer[] = "L";
+  
+  if (connection_service_peek_pebble_app_connection()) {
+    snprintf(bluetooth_buffer, sizeof("C"), "C");
+  } else {
+    snprintf(bluetooth_buffer, sizeof("D"), "D");
+  }
+  
+  text_layer_set_text(bluetooth_layer, bluetooth_buffer);
 }
 
 static void update_battery() {
@@ -83,6 +88,7 @@ static void update_date() {
 
 static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
   update_time();
+  update_bluetooth();
   
   // Update battery percentage every 15 min
   if (tick_time->tm_min % 15 == 0) {
@@ -168,13 +174,22 @@ static void main_window_load(Window *window) {
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(weather_layer));
   
   // Create city layer
-  city_layer = text_layer_create(GRect(0, 110, 144, 24));
+  city_layer = text_layer_create(GRect(0, 110, 120, 24));
   text_layer_set_background_color(city_layer, GColorBlack);
   text_layer_set_text_color(city_layer, GColorWhite);
   text_layer_set_text_alignment(city_layer, GTextAlignmentLeft);
   text_layer_set_font(city_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text(city_layer, "Loading...");
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(city_layer));
+  
+  // Create bluetooth layer
+  bluetooth_layer = text_layer_create(GRect(120, 110, 24, 24));
+  text_layer_set_background_color(bluetooth_layer, GColorBlack);
+  text_layer_set_text_color(bluetooth_layer, GColorWhite);
+  text_layer_set_text_alignment(bluetooth_layer, GTextAlignmentLeft);
+  text_layer_set_font(bluetooth_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text(bluetooth_layer, "L");
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(bluetooth_layer));
   
 }
 
@@ -185,6 +200,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(weather_layer);
   text_layer_destroy(city_layer);
   text_layer_destroy(info_layer);
+  text_layer_destroy(bluetooth_layer);
   
   fonts_unload_custom_font(tall_font);
 }
@@ -246,8 +262,7 @@ static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
 }  
   
 static void init() {
-  current_game = true;
-  
+
   // Create main window
   main_window = window_create();
   window_set_window_handlers(main_window, (WindowHandlers) {
@@ -274,6 +289,8 @@ static void init() {
 }
 
 static void deinit() {
+  persist_write_string(KEY_CITY, text_layer_get_text(city_layer));
+  
   window_destroy(main_window);
 }
   

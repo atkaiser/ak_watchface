@@ -14,6 +14,26 @@ function pad(num, size) {
     return s;
 }
 
+function convertEastToWest(start) {
+  var hours = Number(start.substr(0, start.indexOf(":")));
+  var min = Number(start.substr(start.indexOf(":")+1, 2));
+  var am_pm = start.substr(start.indexOf(" ")+1, 2);
+  if (am_pm == "PM") {
+    hours += 12;
+  }
+  var eastTime = new Date(2015, 0, 1, hours, min);
+  var westTime = new Date(eastTime - 3*60*60*1000);
+  var timeOfDay = "AM";
+  var newHours = westTime.getHours();
+  var newMin = westTime.getMinutes();
+  if (newHours >= 12) {
+    newHours -= 12;
+    timeOfDay = "PM";
+  }
+  var newTime = newHours + ":" + pad(newMin, 2) + " " + timeOfDay;
+  return newTime;
+}
+
 function getWeatherLocation(pos) {
   var date = new Date();
   var dayOfWeek = date.getDay();
@@ -116,20 +136,24 @@ function getWeather() {
 function getTraffic(morning) {
   var url;
   if (morning == '0') {
-    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37+May+Ct,+Hayward,+CA+94544&to=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";  
+    url = "http://sc2ls.mooo.com:10000/time?origin=37+May+Ct,+Hayward,+CA+94544&destination=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";
+//     url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37.632540,-122.059575&to=37.561,-122.286&doReverseGeocode=false";
   } else {
-    url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&to=37+May+Ct,+Hayward,+CA+94544";  
+    url = "http://sc2ls.mooo.com:10000/time?origin=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&destination=37+May+Ct,+Hayward,+CA+94544";
+//     url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37.561,-122.286&to=37.632540,-122.059575&doReverseGeocode=false";  
   }
   console.log('Traffic url: ' + url);
   xhrRequest(url, 'GET', 
     function(responseText) {
-      var json = JSON.parse(responseText);
-      var time = json.route.realTime;
+//       var json = JSON.parse(responseText);
+//       var time = json.route.realTime;
 
-      var min = Math.floor(time / 60);
-      var sec = time - (min * 60);
+//       var min = Math.floor(time / 60);
+//       var sec = time - (min * 60);
           
-      var stringTime = min + ":" + pad(sec, 2);
+//       var stringTime = min + ":" + pad(sec, 2);
+      
+      var stringTime = responseText + " min";
           
       console.log("Traffic time: " + stringTime);
           
@@ -213,24 +237,38 @@ function getNhlInfo(scoresQ) {
       for(var i = 0; i < games.length; i++) {
         var game = games[i];
         if (game.htv == "sharks" || game.atv == "sharks") {
+          var score_string = '';
           var time = game.ts;
           console.log(game.bs);
           if (game.bs == "LIVE") {
             if (!isNaN(time[0])) {
               time = time.substr(0, time.length-2);
             }
-            var score_string = game.atv[0].toUpperCase() + 
+            score_string = game.atv[0].toUpperCase() + 
                 " " + game.ats + "-" + 
                 game.hts + " " + game.htv[0].toUpperCase() + 
                 " " + time;
-            
+          } else if (time == "TODAY") {
+            var newTime = convertEastToWest(game.bs);
+            var away = game.atv[0].toUpperCase();
+            var home = game.htv[0].toUpperCase();
+            if (game.htv == "sharks") {
+              away = game.atv.substr(0,3);
+              away = away.charAt(0).toUpperCase() + away.slice(1);
+            } else {
+              home = game.htv.substr(0,3);
+              home = home.charAt(0).toUpperCase() + home.slice(1);
+            }
+            score_string = away + "-" + home + " " + newTime;
+          }
+          if (score_string !== '') {
             console.log('Score str: ' + score_string);
             console.log('Time: ' + time);
-            
+  
             var dictionary = {
               'KEY_INFO': score_string,
             };
-            
+  
             Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
             sentGame = true;
           }
@@ -262,7 +300,13 @@ function getNbaInfo(scoresQ) {
         if (game.home.abbreviation == 'GSW' || game.visitor.abbreviation == 'GSW') {
           var score_string;
           if (game.visitor.score === '') {
-            score_string = game.visitor.abbreviation + ' - ' + game.home.abbreviation;
+            var start_time;
+            if (game.home.abbreviation == 'GSW') {
+              start_time = game.home_start_time;
+            } else {
+              start_time = game.visitor_start_time;
+            }
+            score_string = game.visitor.abbreviation + ' - ' + game.home.abbreviation + start_time;
           } else {
             score_string = game.visitor.abbreviation[0] + ' ' + game.visitor.score + '-' +
                            game.home.score + ' ' + game.home.abbreviation[0];
@@ -286,26 +330,40 @@ function getNbaInfo(scoresQ) {
   );
 }
 
+function returnBlank(scoresQ) {
+  console.log("Returning nothing");
+  var dictionary = {
+    'KEY_INFO': '',
+  };
+
+  var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
+  var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
+  Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
+}
+
 function getInfo() {
+  console.log("Getting some info");
   var date = new Date();
   var trafficTime = false;
   if (date.getDay() >= 1 && date.getDay() <= 5) {
     if (date.getHours() >= 7 && date.getHours() <= 9) {
       trafficTime = true;
-      if (date.getMinutes() % 1 === 0) {
+      if (date.getMinutes() % 3 === 0) {
         getTraffic('0');
       }
     }
     else if (date.getHours() >= 16 && date.getHours() <= 18) {
       trafficTime = true;
-      if (date.getMinutes() % 5 === 0) {
+      if (date.getMinutes() % 3 === 0) {
         getTraffic('1');
       }
     }
   }
   if (!trafficTime) {
-    if (date.getMinutes() % 2 === 0) {
+    console.log("No traffic, sports time");
+    if (date.getMinutes() % 1 === 0) {
       var scoresQ = [];
+      scoresQ.push(returnBlank);
       scoresQ.push(getNbaInfo);
       scoresQ.push(getBaseballInfo);
       getNhlInfo(scoresQ);
