@@ -1,5 +1,5 @@
 // Global vars
-var forecastUrl = 'https://api.forecast.io/forecast/dee1b0c1a1c5af5520fa94cbd4d99665/';
+var forecastUrl = 'http://api.wunderground.com/api/801311f587b14fc7/';
 
 // Helper function for sending an xml http request
 function xhrRequest(url, type, state, callback) {
@@ -98,7 +98,7 @@ function parseCurrentTemp(responseText, state) {
   
   var json = JSON.parse(responseText);
 
-  var temperature = json.currently.temperature;
+  var temperature = json.current_observation.temp_f;
   console.log('Temperature is ' + temperature);
   var forecastTemp = state.temperature;
   state.temperature = Math.round(temperature) + "/" + Math.round(forecastTemp);
@@ -114,22 +114,29 @@ function parseCurrentTemp(responseText, state) {
 // State contains pos
 function parseForecast(responseText, state) {
   var pos = state.pos;
-  var json = JSON.parse(responseText);
-
-  var temperature = json.daily.data[0].temperatureMax;
-  console.log('Temperature is ' + temperature);
-
-  var conditions = json.daily.data[0].icon;
-  if (conditions.indexOf('partly-cloudy') >= 0) {
-    conditions = 'Part cloud';
+  
+  var desiredDate = new Date();
+  var hour = desiredDate.getHours();
+  if (hour >= 15) {
+    desiredDate.setDate(desiredDate.getDate() + 1);
   }
-  console.log('Conditions are ' + conditions);
+  
+  var json = JSON.parse(responseText);
+  
+  var forecasts = json.forecast.simpleforecast.forecastday;
+  var forecast;
+  for(var i = 0; i < forecasts.length; i++) {
+    if (forecasts[i].date.day == desiredDate.getDate()) {
+      forecast = forecasts[i];
+    }
+  }
+  
+  var temperature = forecast.high.fahrenheit;
+  var conditions = forecast.icon;
 
   // Get the current weather
-  var desiredDate = new Date();
-  var timeString = desiredDate.getTime()/1000|0;
   var position = pos.coords.latitude + ',' + pos.coords.longitude;
-  var url = forecastUrl + position + ',' + timeString;
+  var url = forecastUrl + 'conditions/q/' + position + '.json';
   console.log('current url: ' + url);
   
   xhrRequest(url, 'GET', {pos: pos,
@@ -139,22 +146,10 @@ function parseForecast(responseText, state) {
 
 // After getting the location, get the weather
 function locationSuccess(pos) {
-  var desiredDate = new Date();
-  var hour = desiredDate.getHours();
-  if (hour >= 15) {
-    desiredDate.setDate(desiredDate.getDate() + 1);
-  }
-  desiredDate.setHours(13);
-  desiredDate.setMinutes(0);
-  var timeString = desiredDate.getTime()/1000|0;
-  
-  console.log('Date: ' + desiredDate);
-  
-  var url = forecastUrl +
-            getWeatherLocation(pos) + ',' +
-            timeString;
+  var url = forecastUrl + 'forecast/q/' +
+            getWeatherLocation(pos) + '.json';
 
-  console.log('URL: ' + url);
+  console.log('Forecast URL: ' + url);
   
   xhrRequest(url, 'GET', {pos: pos}, parseForecast);
 }
