@@ -38,12 +38,11 @@ function convertEastToWest(start) {
 }
 
 // Send the weather results to the pebble
-function sendWeather(temperature, conditions, city) {
+function sendWeather(temperature, conditions) {
   // Assemble dictionary using our keys
   var dictionary = {
     'KEY_TEMPERATURE': temperature,
-    'KEY_CONDITIONS': conditions,
-    'KEY_CITY': city,
+    'KEY_CONDITIONS': conditions
   };
 
   Pebble.sendAppMessage(dictionary,
@@ -57,44 +56,25 @@ function sendWeather(temperature, conditions, city) {
 }
 
 function getWeatherLocation(pos) {
-//   var date = new Date();
-//   var dayOfWeek = date.getDay();
+  var date = new Date();
+  var dayOfWeek = date.getDay();
   var position = '';
-//   if ((dayOfWeek >= 1 && dayOfWeek <= 4) ||
-//       (dayOfWeek === 0 && date.getHours() >= 15) ||
-//       (dayOfWeek === 5 && date.getHours() < 15)) {
-//     // Get San Mateo weather
-//     position = '37.561,-122.286';
-//   } else {
+  if ((dayOfWeek >= 1 && dayOfWeek <= 4) ||
+      (dayOfWeek === 0 && date.getHours() >= 15) ||
+      (dayOfWeek === 5 && date.getHours() < 15)) {
+    // Get San Mateo weather
+    position = '37.561,-122.286';
+  } else {
     console.log("Lat: " + pos.coords.latitude);
     console.log("Lon: " + pos.coords.longitude);
     position = pos.coords.latitude + ',' + pos.coords.longitude;
-//   }
-  return position;
-}
-
-// Pares the city response and send back the info for weather
-// State contains temperature and conditions
-function parseCity(cityResponse, state) {
-  var temperature = state.temperature;
-  var conditions = state.conditions;
-  var cityJson = JSON.parse(cityResponse);
-          
-  var address = cityJson.results[0].address_components;
-  var component = 0;
-  while(address[component].types.indexOf("locality") < 0) {
-    component++;
   }
-
-  var city = address[component].short_name;
-
-  console.log('City is ' + city);
-  sendWeather(temperature, conditions, city);
+  return position;
 }
 
 // State has pos, temperature, conditions
 function parseCurrentTemp(responseText, state) {
-  var pos = state.pos;
+  var conditions = state.conditions;
   
   var json = JSON.parse(responseText);
 
@@ -103,10 +83,7 @@ function parseCurrentTemp(responseText, state) {
   var forecastTemp = state.temperature;
   state.temperature = Math.round(temperature) + "/" + Math.round(forecastTemp);
   
-  var locationUrl = 'http://maps.googleapis.com/maps/api/geocode/json?latlng=' + getWeatherLocation(pos);
-
-  xhrRequest(locationUrl, 'GET', state,
-             parseCity);
+  sendWeather(state.temperature, conditions);
   
 }
 
@@ -170,22 +147,12 @@ function getTraffic(morning) {
   var url;
   if (morning == '0') {
     url = "http://sc2ls.mooo.com:10000/time?origin=37+May+Ct,+Hayward,+CA+94544&destination=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";
-//     url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37.632540,-122.059575&to=37.561,-122.286&doReverseGeocode=false";
   } else {
     url = "http://sc2ls.mooo.com:10000/time?origin=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&destination=37+May+Ct,+Hayward,+CA+94544";
-//     url = "http://www.mapquestapi.com/directions/v2/route?key=affE1LXAEKtDF8KfXG7fAx0XHG7NweCe&from=37.561,-122.286&to=37.632540,-122.059575&doReverseGeocode=false";  
   }
   console.log('Traffic url: ' + url);
   xhrRequest(url, 'GET', {}, 
     function(responseText, state) {
-//       var json = JSON.parse(responseText);
-//       var time = json.route.realTime;
-
-//       var min = Math.floor(time / 60);
-//       var sec = time - (min * 60);
-          
-//       var stringTime = min + ":" + pad(sec, 2);
-      
       var stringTime = responseText + " min";
           
       console.log("Traffic time: " + stringTime);
@@ -383,20 +350,20 @@ function getInfo() {
   console.log("Getting some info");
   var date = new Date();
   var trafficTime = false;
-//   if (date.getDay() >= 1 && date.getDay() <= 5) {
-//     if (date.getHours() >= 7 && date.getHours() <= 9) {
-//       trafficTime = true;
-//       if (date.getMinutes() % 1 === 0) {
-//         getTraffic('0');
-//       }
-//     }
-//     else if (date.getHours() >= 16 && date.getHours() <= 18) {
-//       trafficTime = true;
-//       if (date.getMinutes() % 1 === 0) {
-//         getTraffic('1');
-//       }
-//     }
-//   }
+  if (date.getDay() >= 1 && date.getDay() <= 5) {
+    if (date.getHours() >= 7 && date.getHours() <= 9) {
+      trafficTime = true;
+      if (date.getMinutes() % 1 === 0) {
+        getTraffic('0');
+      }
+    }
+    else if (date.getHours() >= 16 && date.getHours() <= 18) {
+      trafficTime = true;
+      if (date.getMinutes() % 1 === 0) {
+        getTraffic('1');
+      }
+    }
+  }
   if (!trafficTime) {
     console.log("No traffic, sports time");
     if (date.getMinutes() % 2 === 0) {

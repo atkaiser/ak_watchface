@@ -2,15 +2,14 @@
 
 #define KEY_TEMPERATURE 0
 #define KEY_CONDITIONS 1
-#define KEY_CITY 2
-#define KEY_INFO 3
+#define KEY_INFO 2
 
 static Window *main_window;
 static TextLayer *time_layer;
 static TextLayer *date_layer;
 static TextLayer *day_of_week_layer;
 static TextLayer *weather_layer;
-static TextLayer *city_layer;
+static TextLayer *steps_layer;
 static TextLayer *battery_layer;
 static TextLayer *info_layer;
 static TextLayer *bluetooth_layer;
@@ -116,6 +115,15 @@ static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
 
 }
 
+static void health_handler(HealthEventType event, void *context) {
+  static char s_value_buffer[8];
+  if (event == HealthEventMovementUpdate) {
+    // display the step count
+    snprintf(s_value_buffer, sizeof(s_value_buffer), "%d", (int)health_service_sum_today(HealthMetricStepCount));
+    text_layer_set_text(steps_layer, s_value_buffer);
+  }
+}
+
 static void main_window_load(Window *window) {
 
   tall_font = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_BITHAM_LARGE_50));
@@ -173,14 +181,14 @@ static void main_window_load(Window *window) {
   text_layer_set_text(weather_layer, "Loading...");
   layer_add_child(window_get_root_layer(window), text_layer_get_layer(weather_layer));
   
-  // Create city layer
-  city_layer = text_layer_create(GRect(0, 110, 120, 24));
-  text_layer_set_background_color(city_layer, GColorBlack);
-  text_layer_set_text_color(city_layer, GColorWhite);
-  text_layer_set_text_alignment(city_layer, GTextAlignmentLeft);
-  text_layer_set_font(city_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text(city_layer, "Loading...");
-  layer_add_child(window_get_root_layer(window), text_layer_get_layer(city_layer));
+  // Create steps layer
+  steps_layer = text_layer_create(GRect(20, 110, 100, 24));
+  text_layer_set_background_color(steps_layer, GColorBlack);
+  text_layer_set_text_color(steps_layer, GColorWhite);
+  text_layer_set_text_alignment(steps_layer, GTextAlignmentLeft);
+  text_layer_set_font(steps_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+  text_layer_set_text(steps_layer, "");
+  layer_add_child(window_get_root_layer(window), text_layer_get_layer(steps_layer));
   
   // Create bluetooth layer
   bluetooth_layer = text_layer_create(GRect(120, 110, 24, 24));
@@ -198,7 +206,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(time_layer);
   text_layer_destroy(date_layer);
   text_layer_destroy(weather_layer);
-  text_layer_destroy(city_layer);
+  text_layer_destroy(steps_layer);
   text_layer_destroy(info_layer);
   text_layer_destroy(bluetooth_layer);
   
@@ -210,7 +218,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   
   static char temperature_buffer[8];
   static char conditions_buffer[32];
-  static char city_layer_buffer[32];
   static char weather_layer_buffer[32];
   static char info_layer_buffer[32];
   
@@ -223,9 +230,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       break;
     case KEY_CONDITIONS:
       snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", t->value->cstring);
-      break;
-    case KEY_CITY:
-      snprintf(city_layer_buffer, sizeof(city_layer_buffer), "%s:", t->value->cstring);
       break;
     case KEY_INFO:
       isInfo = true;
@@ -245,7 +249,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     // Assemble full string and display
     snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s, %s", temperature_buffer, conditions_buffer);
     text_layer_set_text(weather_layer, weather_layer_buffer);
-    text_layer_set_text(city_layer, city_layer_buffer);
   }
 }
 
@@ -285,12 +288,18 @@ static void init() {
   app_message_register_outbox_sent(outbox_sent_callback);
   // Open AppMessage
   app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+  
+  // subscribe to health events
+  if (health_service_events_subscribe(health_handler, NULL)) {
+    // force initial steps display
+    health_handler(HealthEventMovementUpdate, NULL);
+  } else {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Health not available!");
+  }
 
 }
 
 static void deinit() {
-  persist_write_string(KEY_CITY, text_layer_get_text(city_layer));
-  
   window_destroy(main_window);
 }
   

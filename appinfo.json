@@ -1,14 +1,15 @@
 {
     "appKeys": {
-        "KEY_CITY": 2,
         "KEY_CONDITIONS": 1,
-        "KEY_INFO": 3,
+        "KEY_INFO": 2,
         "KEY_TEMPERATURE": 0
     },
     "capabilities": [
-        "location"
+        "location",
+        "health"
     ],
     "companyName": "alextkaiser@gmail.com",
+    "enableMultiJS": false,
     "longName": "AK_WATCHFACE",
     "projectType": "native",
     "resources": {
