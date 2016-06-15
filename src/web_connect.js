@@ -146,9 +146,9 @@ function getWeather() {
 function getTraffic(morning) {
   var url;
   if (morning == '0') {
-    url = "http://sc2ls.mooo.com:10000/time?origin=37+May+Ct,+Hayward,+CA+94544&destination=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";
+    url = "http://sc2ls.mooo.com:10000/time?origin=5024+Ray+Ave,+Castro+Valley,+CA+94546&destination=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404";
   } else {
-    url = "http://sc2ls.mooo.com:10000/time?origin=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&destination=37+May+Ct,+Hayward,+CA+94544";
+    url = "http://sc2ls.mooo.com:10000/time?origin=777+Mariners+Island+Blvd,+San+Mateo,+CA+94404&destination=5024+Ray+Ave,+Castro+Valley,+CA+94546";
   }
   console.log('Traffic url: ' + url);
   xhrRequest(url, 'GET', {}, 
@@ -159,6 +159,7 @@ function getTraffic(morning) {
           
       var dictionary = {
         'KEY_INFO': stringTime,
+        'KEY_IN_INFO': 1,
       };
           
       Pebble.sendAppMessage(dictionary,
@@ -186,26 +187,49 @@ function getBaseballInfo(scoresQ) {
       var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
       var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
       var sentGame = false;
+      var inGame = 0;
       
       if (games) {
         for(var i = 0; i < games.length; i++) {
           var game = games[i];
           if (game.home_team_name == "Giants" || game.away_team_name == "Giants") {
+            var time;
+            
+            var score_string;
             var home_score = game.linescore.r.home;
             var away_score = game.linescore.r.away;
-            var inning = game.status.inning;
-            if (game.status.top_inning == "Y") {
-              inning = "T" + inning;
-            } else {
-              inning = "B" + inning;
+            if (game.status.status == "In Progress") {
+              inGame = 1;
+              var inning = game.status.inning;
+              if (game.status.top_inning == "Y") {
+                inning = "T" + inning;
+              } else {
+                inning = "B" + inning;
+              }
+              score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " " + inning;
+            } else if (game.status.status == "Game Over" || game.status.status == "Final") {
+              score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " F";
             }
-            
-            var score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " " + inning;
+            else {
+              var awayTeamAbbreviation;
+              var homeTeamAbbreviation;
+              if (game.home_team_name == "Giants") {
+                time = game.home_time;
+                homeTeamAbbreviation = "G";
+                awayTeamAbbreviation = game.away_team_name.substr(0,3);
+              } else {
+                awayTeamAbbreviation = "G";
+                homeTeamAbbreviation = game.home_team_name.substr(0,3);
+                time = game.away_time;
+              }
+              score_string = awayTeamAbbreviation + "-" + homeTeamAbbreviation + " " + time;
+            }
             
             console.log('Baseball str: ' + score_string);
             
             var dictionary = {
               'KEY_INFO': score_string,
+              'KEY_IN_INFO': inGame,
             };
             
             Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
@@ -229,6 +253,7 @@ function getNhlInfo(scoresQ) {
       var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
       var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
       var sentGame = false;
+      var inGame = 0;
       
       var json_str = res.substr(res.indexOf("(")+1,
                                 res.indexOf(")") - (res.indexOf("(") + 1));
@@ -241,6 +266,7 @@ function getNhlInfo(scoresQ) {
           var time = game.ts;
           console.log(game.bs);
           if (game.bs == "LIVE") {
+            inGame = 1;
             if (!isNaN(time[0])) {
               time = time.substr(0, time.length-2);
             }
@@ -272,6 +298,7 @@ function getNhlInfo(scoresQ) {
   
             var dictionary = {
               'KEY_INFO': score_string,
+              'KEY_IN_INFO': inGame,
             };
   
             Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
@@ -297,6 +324,7 @@ function getNbaInfo(scoresQ) {
       var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
       var sendFail = function(e) {console.log('Error sending game info to Pebble!');};
       var sentGame = false;
+      var inGame = 0;
       
       var json = JSON.parse(res);
       var games = json.sports_content.games.game;
@@ -313,6 +341,7 @@ function getNbaInfo(scoresQ) {
             }
             score_string = game.visitor.abbreviation + ' - ' + game.home.abbreviation + start_time;
           } else {
+            inGame = 1;
             score_string = game.visitor.abbreviation[0] + ' ' + game.visitor.score + '-' +
                            game.home.score + ' ' + game.home.abbreviation[0];
           }
@@ -321,6 +350,7 @@ function getNbaInfo(scoresQ) {
 
           var dictionary = {
             'KEY_INFO': score_string,
+            'KEY_IN_INFO': inGame,
           };
 
           Pebble.sendAppMessage(dictionary, sendSuccess, sendFail);
@@ -339,6 +369,7 @@ function returnBlank(scoresQ) {
   console.log("Returning nothing");
   var dictionary = {
     'KEY_INFO': '',
+    'KEY_IN_INFO': 0,
   };
 
   var sendSuccess = function(e) {console.log('Game info sent to Pebble successfully!');};
@@ -353,26 +384,20 @@ function getInfo() {
   if (date.getDay() >= 1 && date.getDay() <= 5) {
     if (date.getHours() >= 7 && date.getHours() <= 9) {
       trafficTime = true;
-      if (date.getMinutes() % 1 === 0) {
-        getTraffic('0');
-      }
+      getTraffic('0');
     }
     else if (date.getHours() >= 16 && date.getHours() <= 18) {
       trafficTime = true;
-      if (date.getMinutes() % 1 === 0) {
-        getTraffic('1');
-      }
+      getTraffic('1');
     }
   }
   if (!trafficTime) {
     console.log("No traffic, sports time");
-    if (date.getMinutes() % 2 === 0) {
-      var scoresQ = [];
-      scoresQ.push(returnBlank);
-      scoresQ.push(getNbaInfo);
-      scoresQ.push(getBaseballInfo);
-      getNhlInfo(scoresQ);
-    }
+    var scoresQ = [];
+    scoresQ.push(returnBlank);
+    scoresQ.push(getBaseballInfo);
+    scoresQ.push(getNbaInfo);
+    getNhlInfo(scoresQ);
   }
 }
 
@@ -395,5 +420,6 @@ Pebble.addEventListener('ready',
   function(e) {
     console.log('PebbleKit JS ready!');
     getWeather();
+    getInfo();
   }
 );

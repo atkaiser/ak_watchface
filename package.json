@@ -1,0 +1,40 @@
+{
+    "author": "alextkaiser@gmail.com",
+    "dependencies": {},
+    "keywords": [],
+    "name": "ak_watchface",
+    "pebble": {
+        "capabilities": [
+            "location",
+            "health"
+        ],
+        "displayName": "AK_WATCHFACE",
+        "enableMultiJS": false,
+        "messageKeys": {
+            "KEY_CONDITIONS": 1,
+            "KEY_INFO": 2,
+            "KEY_IN_INFO": 3,
+            "KEY_TEMPERATURE": 0
+        },
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "characterRegex": "[0-9:.]",
+                    "file": "fonts/bitham-bold.ttf",
+                    "name": "BITHAM_LARGE_50",
+                    "type": "font"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "basalt"
+        ],
+        "uuid": "b06c6436-1fa0-4122-bfc4-f14d34d578f9",
+        "watchapp": {
+            "watchface": true
+        }
+    },
+    "version": "1.0.0"
+}

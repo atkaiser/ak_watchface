@@ -3,6 +3,7 @@
 #define KEY_TEMPERATURE 0
 #define KEY_CONDITIONS 1
 #define KEY_INFO 2
+#define KEY_IN_INFO 3
 
 static Window *main_window;
 static TextLayer *time_layer;
@@ -15,6 +16,9 @@ static TextLayer *info_layer;
 static TextLayer *bluetooth_layer;
 
 static GFont tall_font;
+
+// 1 is true, 0 is false
+static bool in_game;
 
 static void update_time() {
   // Get a tm structure
@@ -99,20 +103,30 @@ static void minute_update(struct tm *tick_time, TimeUnits units_changed) {
     update_date();
   }
 
-  DictionaryIterator *iter;
-  app_message_outbox_begin(&iter);
+  // We want to get info from phone
+  if ((tick_time->tm_min % 15 == 0) ||
+      (in_game && (tick_time->tm_min % 3 == 0)) ||
+      (tick_time->tm_min % 15 == 0)) {
+
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    
+    // Get weather update every 15 minutes
+    if(tick_time->tm_min % 15 == 0) {
+      dict_write_uint8(iter, KEY_TEMPERATURE, 0);
+    }
+    
+    // Get new info, which is traffic or game data
+    // This won't always call back
+    if ((in_game && (tick_time->tm_min % 3 == 0)) ||
+        (tick_time->tm_min % 10 == 0)) {
+        dict_write_uint8(iter, KEY_INFO, 0);
+    }
   
-  // Get weather update every 15 minutes
-  if(tick_time->tm_min % 15 == 0) {
-    dict_write_uint8(iter, KEY_TEMPERATURE, 0);
+    app_message_outbox_send();
+        
   }
   
-  // Get new info, which is traffic or game data
-  // This won't always call back
-  dict_write_uint8(iter, KEY_INFO, 0);
-  
-  app_message_outbox_send();
-
 }
 
 static void health_handler(HealthEventType event, void *context) {
@@ -235,6 +249,15 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       isInfo = true;
       snprintf(info_layer_buffer, sizeof(info_layer_buffer), "%s", t->value->cstring);
       break;
+    case KEY_IN_INFO:
+      if (t->value->int8 == 1) {
+        APP_LOG(APP_LOG_LEVEL_ERROR, "In game");
+        in_game = true;
+      } else {
+        APP_LOG(APP_LOG_LEVEL_ERROR, "Not in game");
+        in_game = false;
+      }
+      break;
     default:
       APP_LOG(APP_LOG_LEVEL_ERROR, "Key %d not recognized!", (int)t->key);
       break;
@@ -277,6 +300,9 @@ static void init() {
   
   // Register with TickTimerService
   tick_timer_service_subscribe(MINUTE_UNIT, minute_update);
+  
+  // Initial updates
+  in_game = true;
   update_time();
   update_date();
   update_battery();
