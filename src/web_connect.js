@@ -175,6 +175,7 @@ function getTraffic(morning) {
 }
 
 function getBaseballInfo(scoresQ) {
+  console.log('MLB call');
   var date = new Date();
   var url = 'http://mlb.mlb.com/gdcross/components/game/mlb/year_' +
       date.getFullYear() + '/month_' + pad(date.getMonth()+1, 2) + '/day_' + pad(date.getDate(), 2) + '/master_scoreboard.json';
@@ -196,19 +197,24 @@ function getBaseballInfo(scoresQ) {
             var time;
             
             var score_string;
-            var home_score = game.linescore.r.home;
-            var away_score = game.linescore.r.away;
-            if (game.status.status == "In Progress") {
-              inGame = 1;
-              var inning = game.status.inning;
-              if (game.status.top_inning == "Y") {
-                inning = "T" + inning;
-              } else {
-                inning = "B" + inning;
+            var status = game.status.status;
+            if (status === "In Progress" ||
+                status === "Game Over" ||
+                status === "Final") {
+              var home_score = game.linescore.r.home;
+              var away_score = game.linescore.r.away;
+              if (game.status.status == "In Progress") {
+                inGame = 1;
+                var inning = game.status.inning;
+                if (game.status.top_inning == "Y") {
+                  inning = "T" + inning;
+                } else {
+                  inning = "B" + inning;
+                }
+                score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " " + inning;
+              } else if (game.status.status == "Game Over" || game.status.status == "Final") {
+                score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " F";
               }
-              score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " " + inning;
-            } else if (game.status.status == "Game Over" || game.status.status == "Final") {
-              score_string = game.away_team_name[0] + " " + away_score + "-" + home_score + " " + game.home_team_name[0] + " F";
             }
             else {
               var awayTeamAbbreviation;
@@ -238,6 +244,7 @@ function getBaseballInfo(scoresQ) {
         }
       }
       if (!sentGame && scoresQ.length !== 0) {
+        console.log('MLB done, getting next');
         var nextInfo = scoresQ.pop();
         nextInfo(scoresQ);
       }
@@ -308,6 +315,7 @@ function getNhlInfo(scoresQ) {
       }
       if (!sentGame && scoresQ.length !== 0) {
         var nextInfo = scoresQ.pop();
+        console.log('NHL Done, getting next');
         nextInfo(scoresQ);
       }
     }
@@ -395,8 +403,8 @@ function getInfo() {
     console.log("No traffic, sports time");
     var scoresQ = [];
     scoresQ.push(returnBlank);
-    scoresQ.push(getBaseballInfo);
     scoresQ.push(getNbaInfo);
+    scoresQ.push(getBaseballInfo);
     getNhlInfo(scoresQ);
   }
 }
